@@ -1,0 +1,21 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules
+
+# Build output
+dist
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Generated files from tsc -b
+vite.config.js
+vite.config.d.ts
+
+# Editor
+.vscode
+.idea
