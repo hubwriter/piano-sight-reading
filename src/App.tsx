@@ -16,7 +16,7 @@ const STAFF_TOP = 80;    // y of the top staff line in the SVG
 
 type Clef = 'treble' | 'bass';
 type KeyColor = 'white' | 'black';
-type KeyState = 'normal' | 'correct' | 'wrong';
+type KeyState = 'normal' | 'correct' | 'wrong' | 'reveal';
 
 interface PianoKey {
   label: string;
@@ -231,27 +231,40 @@ function MusicStaff({ staffNote }: { staffNote: StaffNote }) {
 
 // ─── PianoKeyboard Component ──────────────────────────────────────────────────
 
+// Format a note label for display: strip octave number, replace flat 'b' with ♭
+function formatNoteName(label: string): string {
+  return label.replace(/\d+$/, '').replace(/b$/, '\u266d');
+}
+
+const SHARP_TO_FLAT_NAME: Record<string, string> = {
+  'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb',
+};
+
 const KEY_COLORS: Record<KeyState, { white: string; black: string }> = {
   normal:  { white: '#ffffff', black: '#1a1a1a' },
   correct: { white: '#4caf50', black: '#2e7d32' },
   wrong:   { white: '#f44336', black: '#c62828' },
+  reveal:  { white: '#ff9800', black: '#e65100' },
 };
 
 function PianoKeyboard({
   keyStates,
   onKeyClick,
+  clickHint,
 }: {
   keyStates: Record<string, KeyState>;
   onKeyClick: (label: string) => void;
+  clickHint: { noteName: string; cx: number } | null;
 }) {
   const whiteKeys = KEYBOARD_KEYS.filter(k => k.color === 'white');
   const blackKeys = KEYBOARD_KEYS.filter(k => k.color === 'black');
+  const HINT_H = 22;
 
   return (
     <svg
       width={KEYBOARD_WIDTH + 2}
-      height={WHITE_KEY_HEIGHT + 2}
-      viewBox={`0 0 ${KEYBOARD_WIDTH + 2} ${WHITE_KEY_HEIGHT + 2}`}
+      height={WHITE_KEY_HEIGHT + 2 + HINT_H}
+      viewBox={`0 0 ${KEYBOARD_WIDTH + 2} ${WHITE_KEY_HEIGHT + 2 + HINT_H}`}
       style={{ display: 'block', margin: '0 auto', overflow: 'visible', cursor: 'pointer' }}
     >
       {/* White keys */}
@@ -307,6 +320,112 @@ function PianoKeyboard({
           </g>
         );
       })}
+      {/* Click hint label below keyboard */}
+      {clickHint && (
+        <text
+          x={clickHint.cx}
+          y={WHITE_KEY_HEIGHT + 16}
+          textAnchor="middle"
+          fontSize={13}
+          fill="#888"
+          fontFamily="system-ui, sans-serif"
+          style={{ userSelect: 'none', pointerEvents: 'none' }}
+        >
+          {clickHint.noteName}
+        </text>
+      )}
+    </svg>
+  );
+}
+
+// ─── Stopwatch Component ──────────────────────────────────────────────────────
+
+const SW_R = 80;         // face radius
+const SW_SIZE = 200;     // SVG viewBox size
+const SW_CX = 100;
+const SW_CY = 105;
+const SW_MAX = 15;       // max seconds on face
+
+// Angle for a given second value: 0 at top, increasing clockwise
+function swAngle(v: number): number {
+  return (v / SW_MAX) * 2 * Math.PI - Math.PI / 2;
+}
+
+function Stopwatch({ duration, timeLeft, running }: { duration: number; timeLeft: number; running: boolean }) {
+  const handAngle = swAngle(timeLeft);
+  const handLen = SW_R * 0.72;
+  const hx = SW_CX + handLen * Math.cos(handAngle);
+  const hy = SW_CY + handLen * Math.sin(handAngle);
+
+  // Active arc: from timeLeft position back to 0 (counterclockwise), i.e. the remaining arc
+  const arcStart = swAngle(0);
+  const arcEnd = swAngle(timeLeft);
+  const arcLarge = timeLeft > SW_MAX / 2 ? 1 : 0;
+  // arc goes from 0-angle to timeLeft-angle clockwise
+  const arcX1 = SW_CX + SW_R * 0.88 * Math.cos(arcStart);
+  const arcY1 = SW_CY + SW_R * 0.88 * Math.sin(arcStart);
+  const arcX2 = SW_CX + SW_R * 0.88 * Math.cos(arcEnd);
+  const arcY2 = SW_CY + SW_R * 0.88 * Math.sin(arcEnd);
+
+  return (
+    <svg width={SW_SIZE} height={SW_SIZE + 10} viewBox={`0 0 ${SW_SIZE} ${SW_SIZE + 10}`}>
+      {/* Outer ring */}
+      <circle cx={SW_CX} cy={SW_CY} r={SW_R + 8} fill="#555" />
+      {/* Stem at top */}
+      <rect x={SW_CX - 6} y={SW_CY - SW_R - 16} width={12} height={12} rx={3} fill="#555" />
+      {/* Crown button top */}
+      <rect x={SW_CX - 8} y={SW_CY - SW_R - 22} width={16} height={8} rx={4} fill="#777" />
+      {/* Face */}
+      <circle cx={SW_CX} cy={SW_CY} r={SW_R} fill="#fffef8" />
+      {/* Remaining-time arc */}
+      {timeLeft > 0 && (
+        <path
+          d={`M ${arcX1} ${arcY1} A ${SW_R * 0.88} ${SW_R * 0.88} 0 ${arcLarge} 1 ${arcX2} ${arcY2}`}
+          fill="none"
+          stroke={running ? '#4caf50' : '#90caf9'}
+          strokeWidth={5}
+          strokeLinecap="round"
+        />
+      )}
+      {/* Tick marks & labels */}
+      {Array.from({ length: SW_MAX + 1 }, (_, i) => {
+        const a = swAngle(i);
+        const isMajor = i % 5 === 0;
+        const r1 = SW_R - (isMajor ? 14 : 8);
+        const r2 = SW_R - 2;
+        const x1 = SW_CX + r1 * Math.cos(a);
+        const y1 = SW_CY + r1 * Math.sin(a);
+        const x2 = SW_CX + r2 * Math.cos(a);
+        const y2 = SW_CY + r2 * Math.sin(a);
+        const labelR = SW_R - (isMajor ? 26 : 21);
+        const lx = SW_CX + labelR * Math.cos(a);
+        const ly = SW_CY + labelR * Math.sin(a);
+        const showLabel = i > 0 && i < SW_MAX;
+        return (
+          <g key={i}>
+            <line x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="#555" strokeWidth={isMajor ? 2 : 1} strokeLinecap="round" />
+            {showLabel && (
+              <text x={lx} y={ly} textAnchor="middle" dominantBaseline="central"
+                fontSize={isMajor ? 11 : 8} fill="#444" fontFamily="system-ui, sans-serif"
+                fontWeight={isMajor ? '600' : '400'}>
+                {i}
+              </text>
+            )}
+          </g>
+        );
+      })}
+      {/* Duration marker dot */}
+      <circle
+        cx={SW_CX + (SW_R - 8) * Math.cos(swAngle(duration))}
+        cy={SW_CY + (SW_R - 8) * Math.sin(swAngle(duration))}
+        r={4} fill="#1976d2"
+      />
+      {/* Hand */}
+      <line x1={SW_CX} y1={SW_CY} x2={hx} y2={hy}
+        stroke="#d32f2f" strokeWidth={3} strokeLinecap="round" />
+      {/* Centre pin */}
+      <circle cx={SW_CX} cy={SW_CY} r={5} fill="#333" />
     </svg>
   );
 }
@@ -318,8 +437,120 @@ export default function App() {
   const [keyStates, setKeyStates] = useState<Record<string, KeyState>>({});
   const [score, setScore] = useState({ correct: 0, total: 0 });
   const greenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [clickHint, setClickHint] = useState<{ noteName: string; cx: number } | null>(null);
+  const clickHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Timed mode state
+  const [timedEnabled, setTimedEnabled] = useState(false);
+  const [duration, setDuration] = useState(5);
+  const [timeLeft, setTimeLeft] = useState(5);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [revealNote, setRevealNote] = useState<StaffNote | null>(null);
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Refs so callbacks always see latest values without deps
+  const currentNoteRef = useRef(currentNote);
+  const durationRef = useRef(duration);
+  useEffect(() => { currentNoteRef.current = currentNote; }, [currentNote]);
+  useEffect(() => { durationRef.current = duration; }, [duration]);
+
+  // Keep timeLeft in sync with duration when not running
+  useEffect(() => {
+    if (!timerRunning) setTimeLeft(duration);
+  }, [duration, timerRunning]);
+
+  const stopTimer = useCallback(() => {
+    if (timerIntervalRef.current !== null) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    if (revealTimerRef.current !== null) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+    setRevealNote(null);
+    setKeyStates({});
+    setTimerRunning(false);
+  }, []);
+
+  const startTimerInterval = useCallback(() => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = setInterval(() => {
+      setTimeLeft(prev => Math.max(0, prev - 1));
+    }, 1000);
+  }, []);
+
+  const startTimer = useCallback(() => {
+    setTimerRunning(true);
+    setTimeLeft(prev => prev > 0 ? prev : durationRef.current);
+    startTimerInterval();
+  }, [startTimerInterval]);
+
+  // Detect timeout: when timeLeft reaches 0 while running, show reveal then advance
+  useEffect(() => {
+    if (timeLeft !== 0 || !timerRunning) return;
+    // Pause the interval while revealing
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    const timedOut = currentNoteRef.current;
+    setRevealNote(timedOut);
+    setKeyStates({ [timedOut.keyboardLabel]: 'reveal' });
+    revealTimerRef.current = setTimeout(() => {
+      revealTimerRef.current = null;
+      setRevealNote(null);
+      setKeyStates({});
+      setScore(s => ({ ...s, total: s.total + 1 }));
+      setCurrentNote(prev => {
+        let next = randomNote();
+        while (next.label === prev.label) next = randomNote();
+        return next;
+      });
+      const d = durationRef.current;
+      setTimeLeft(d);
+      // Restart interval after a brief delay so the new timeLeft value is set first
+      timerIntervalRef.current = setInterval(() => {
+        setTimeLeft(prev => Math.max(0, prev - 1));
+      }, 1000);
+    }, 2000);
+  }, [timeLeft, timerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stop timer when timed mode is toggled off
+  useEffect(() => {
+    if (!timedEnabled) stopTimer();
+  }, [timedEnabled, stopTimer]);
+
+  // Clean up on unmount
+  useEffect(() => () => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+    if (clickHintTimerRef.current) clearTimeout(clickHintTimerRef.current);
+  }, []);
 
   const handleKeyClick = useCallback((label: string) => {
+    // Ignore clicks during the timeout-reveal period
+    if (revealNote !== null) return;
+
+    // Show note name hint below the clicked key
+    const clickedKey = KEYBOARD_KEYS.find(k => k.label === label);
+    if (clickedKey) {
+      const cx = clickedKey.x + (clickedKey.color === 'white' ? WHITE_KEY_WIDTH / 2 : BLACK_KEY_WIDTH / 2);
+      // For black keys, choose sharp or flat name based on what's shown on the staff
+      const rawName = label.replace(/\d+$/, '');
+      const flatEquiv = SHARP_TO_FLAT_NAME[rawName];
+      const displayName =
+        clickedKey.color === 'black' && currentNote.accidental === 'flat' && flatEquiv
+          ? formatNoteName(flatEquiv)
+          : formatNoteName(label);
+      if (clickHintTimerRef.current) clearTimeout(clickHintTimerRef.current);
+      setClickHint({ noteName: displayName, cx });
+      clickHintTimerRef.current = setTimeout(() => {
+        setClickHint(null);
+        clickHintTimerRef.current = null;
+      }, 2000);
+    }
+
     // Cancel and clear any lingering green key immediately
     if (greenTimerRef.current !== null) {
       clearTimeout(greenTimerRef.current);
@@ -330,12 +561,13 @@ export default function App() {
 
     if (isCorrect) {
       setScore(s => ({ correct: s.correct + 1, total: s.total + 1 }));
-      // Advance to next note immediately
       setCurrentNote(prev => {
         let next = randomNote();
         while (next.label === prev.label) next = randomNote();
         return next;
       });
+      // Reset countdown on correct answer
+      if (timerRunning) setTimeLeft(duration);
       // Show green key, clear it after 2s
       setKeyStates({ [label]: 'correct' });
       greenTimerRef.current = setTimeout(() => {
@@ -357,7 +589,7 @@ export default function App() {
         });
       }, 1600);
     }
-  }, [currentNote]);
+  }, [currentNote, timerRunning, duration, revealNote]);
 
   return (
     <div style={{
@@ -388,26 +620,115 @@ export default function App() {
           </div>
         </div>
 
-        {/* Staff */}
+        {/* Main card: Timed toggle + [duration | staff | stopwatch] */}
         <div style={{
-          marginTop: 28,
+          marginTop: 16,
           background: '#fffef8',
           borderRadius: 10,
           boxShadow: '0 2px 16px rgba(0,0,0,0.10)',
-          padding: '20px 0',
+          padding: '10px 24px 14px',
           overflow: 'hidden',
         }}>
-          <MusicStaff staffNote={currentNote} />
-          <div style={{
-            textAlign: 'center', fontSize: 13, color: '#bbb', marginTop: 8,
-          }}>
-            Click the matching key on the piano
+          {/* Timed toggle — top left */}
+          <div style={{ marginBottom: 6 }}>
+            <button
+              onClick={() => setTimedEnabled(v => !v)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                background: timedEnabled ? '#1976d2' : '#ccc',
+                color: timedEnabled ? '#fff' : '#555',
+                border: 'none', borderRadius: 20, padding: '6px 16px',
+                fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.15)', transition: 'background 0.2s',
+              }}
+            >
+              <span style={{
+                width: 14, height: 14, borderRadius: '50%',
+                background: timedEnabled ? '#fff' : '#888',
+                display: 'inline-block', flexShrink: 0,
+              }} />
+              Timed
+            </button>
+          </div>
+
+          {/* Three-column row: duration | staff | stopwatch */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+
+            {/* Left: duration controls (only when timed enabled) */}
+            <div style={{ flex: '0 0 200px', display: 'flex', flexDirection: 'column',
+              alignItems: 'flex-start', justifyContent: 'center', gap: 12,
+              visibility: timedEnabled ? 'visible' : 'hidden', marginTop: -16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: '#555', fontWeight: 600 }}>Duration:</span>
+                <button
+                  onClick={() => setDuration(d => Math.max(2, d - 1))}
+                  disabled={timerRunning}
+                  style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #aaa',
+                    background: '#fff', fontSize: 18, cursor: 'pointer', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    lineHeight: 1 }}>−</button>
+                <span style={{ fontSize: 20, fontWeight: 700, minWidth: 36,
+                  textAlign: 'center', color: '#222' }}>{duration}s</span>
+                <button
+                  onClick={() => setDuration(d => Math.min(15, d + 1))}
+                  disabled={timerRunning}
+                  style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #aaa',
+                    background: '#fff', fontSize: 18, cursor: 'pointer', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    lineHeight: 1 }}>+</button>
+              </div>
+              <input
+                type="range" min={2} max={15} value={duration}
+                disabled={timerRunning}
+                onChange={e => setDuration(Number(e.target.value))}
+                style={{ width: 160, accentColor: '#1976d2' }}
+              />
+            </div>
+
+            {/* Centre: staff */}
+            <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', marginTop: -16 }}>
+              {/* Revealed note label — fixed-height container so nothing shifts */}
+              <div style={{ height: 40, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', width: '100%' }}>
+                <div style={{
+                  fontSize: 36, fontWeight: 800, color: '#222',
+                  letterSpacing: 1, textAlign: 'center', lineHeight: 1,
+                  visibility: revealNote ? 'visible' : 'hidden',
+                }}>
+                  {revealNote ? formatNoteName(revealNote.label) : '\u00a0'}
+                </div>
+              </div>
+              <MusicStaff staffNote={currentNote} />
+              <div style={{ fontSize: 13, color: '#bbb', marginTop: 8 }}>
+                Click the matching key on the piano
+              </div>
+            </div>
+
+            {/* Right: stopwatch + start/pause (only when timed enabled) */}
+            <div style={{ flex: '0 0 200px', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 10,
+              visibility: timedEnabled ? 'visible' : 'hidden' }}>
+              <Stopwatch duration={duration} timeLeft={timeLeft} running={timerRunning} />
+              <button
+                onClick={() => timerRunning ? stopTimer() : startTimer()}
+                style={{
+                  padding: '10px 0', width: 120, fontSize: 16, fontWeight: 700,
+                  background: timerRunning ? '#f57c00' : '#388e3c',
+                  color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'background 0.2s',
+                }}
+              >
+                {timerRunning ? 'Pause' : 'Start'}
+              </button>
+            </div>
+
           </div>
         </div>
 
         {/* Keyboard */}
         <div style={{ overflowX: 'auto', paddingBottom: 8, marginTop: 28 }}>
-          <PianoKeyboard keyStates={keyStates} onKeyClick={handleKeyClick} />
+          <PianoKeyboard keyStates={keyStates} onKeyClick={handleKeyClick} clickHint={clickHint} />
         </div>
 
       </div>
