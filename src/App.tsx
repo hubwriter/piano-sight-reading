@@ -430,9 +430,63 @@ function Stopwatch({ duration, timeLeft, running }: { duration: number; timeLeft
   );
 }
 
+// ─── Piano Sampler ─────────────────────────────────────────────────────────────
+
+const GLEITZ_BASE = 'https://gleitz.github.io/midi-js-soundfonts/MusyngKite/acoustic_grand_piano-mp3';
+
+const SHARP_TO_GLEITZ: Record<string, string> = {
+  'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb',
+};
+
+function labelToGleitz(label: string): string {
+  const note = label.replace(/\d+$/, '');
+  const octave = label.match(/\d+$/)?.[0] ?? '';
+  return (SHARP_TO_GLEITZ[note] ?? note) + octave;
+}
+
+function usePianoSampler() {
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const buffersRef = useRef<Map<string, AudioBuffer>>(new Map());
+  const [samplerReady, setSamplerReady] = useState(false);
+
+  useEffect(() => {
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+    const labels = KEYBOARD_KEYS.map(k => k.label);
+    Promise.all(
+      labels.map(async label => {
+        try {
+          const res = await fetch(`${GLEITZ_BASE}/${labelToGleitz(label)}.mp3`);
+          const arrayBuf = await res.arrayBuffer();
+          const audioBuf = await ctx.decodeAudioData(arrayBuf);
+          buffersRef.current.set(label, audioBuf);
+        } catch (e) {
+          console.warn(`Failed to load piano sample: ${label}`, e);
+        }
+      })
+    ).then(() => setSamplerReady(true));
+    return () => { ctx.close(); };
+  }, []);
+
+  const playNote = useCallback((label: string) => {
+    const ctx = audioCtxRef.current;
+    const buf = buffersRef.current.get(label);
+    if (!ctx || !buf) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+  }, []);
+
+  return { playNote, samplerReady };
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const { playNote, samplerReady } = usePianoSampler();
+
   const [currentNote, setCurrentNote] = useState<StaffNote>(() => randomNote());
   const [keyStates, setKeyStates] = useState<Record<string, KeyState>>({});
   const [score, setScore] = useState({ correct: 0, total: 0 });
@@ -532,6 +586,9 @@ export default function App() {
     // Ignore clicks during the timeout-reveal period
     if (revealNote !== null) return;
 
+    // Play the piano note immediately
+    playNote(label);
+
     // Show note name hint below the clicked key
     const clickedKey = KEYBOARD_KEYS.find(k => k.label === label);
     if (clickedKey) {
@@ -589,7 +646,7 @@ export default function App() {
         });
       }, 1600);
     }
-  }, [currentNote, timerRunning, duration, revealNote]);
+  }, [currentNote, timerRunning, duration, revealNote, playNote]);
 
   return (
     <div style={{
@@ -611,12 +668,21 @@ export default function App() {
           <h1 style={{ margin: 0, fontSize: 26, color: '#222', letterSpacing: -0.5 }}>
             Piano Sight Reading
           </h1>
-          <div style={{
-            fontSize: 22, fontWeight: 700, color: '#333',
-            background: '#fff', borderRadius: 8, padding: '6px 16px',
-            boxShadow: '0 1px 6px rgba(0,0,0,0.10)',
-          }}>
-            {score.correct} / {score.total}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {!samplerReady && (
+              <span style={{
+                fontSize: 12, color: '#999', fontStyle: 'italic',
+              }}>
+                Loading audio…
+              </span>
+            )}
+            <div style={{
+              fontSize: 22, fontWeight: 700, color: '#333',
+              background: '#fff', borderRadius: 8, padding: '6px 16px',
+              boxShadow: '0 1px 6px rgba(0,0,0,0.10)',
+            }}>
+              {score.correct} / {score.total}
+            </div>
           </div>
         </div>
 
