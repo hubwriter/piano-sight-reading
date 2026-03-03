@@ -12,6 +12,9 @@ const OCTAVE_WIDTH = 7 * WHITE_KEY_WIDTH;
 const LINE_SPACING = 20; // px between staff lines
 const STAFF_TOP = 80;    // y of the top staff line in the SVG
 
+// Horizontal position of the note head within the staff SVG
+const NOTE_X = 300;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Clef = 'treble' | 'bass';
