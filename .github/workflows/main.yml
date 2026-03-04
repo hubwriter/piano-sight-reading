@@ -9,7 +9,7 @@ permissions:
 jobs:
   daily-summary:
     runs-on: ubuntu-latest
-    steps:
+    steps:   
       - name: Checkout
         uses: actions/checkout@v5
 
