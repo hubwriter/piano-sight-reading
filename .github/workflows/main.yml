@@ -23,6 +23,4 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         run: |
-          FILE=CHANGE_LOG.md
-          copilot -p "Review the git log for this repository and write a bullet point summary of all code changes that were made today. Include a brief description of what was changed. Write the details to $FILE" --allow-tool "bash(git *)" --allow-tool "write($FILE)" --no-ask-user -s
-          cat "$FILE" >> "$GITHUB_STEP_SUMMARY"
+          copilot -p "Review the git log for this repository and write a bullet point summary of all code changes that were made today. Include a brief description of what was changed. Write the summary to the file \$GITHUB_STEP_SUMMARY" --allow-tool "bash(git *)" --allow-tool "bash(tee *)" --no-ask-user -s
