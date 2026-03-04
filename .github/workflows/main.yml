@@ -25,5 +25,5 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
-          copilot -p "Review the git log for this repository and write a bullet point summary of all code changes that were made today. Include a brief description of what was changed. Write the details to summary.md" --allow-tool 'shell(git:*)' --allow-tool write --no-ask-user
+          copilot -p "Review the git log for this repository and write a bullet point summary of all code changes that were made today, with links to the relevant commit on GitHub. Above the bullet list give a description (max 100 words) summarizing the changes made. Write the details to summary.md" --allow-tool 'shell(git:*)' --allow-tool write --no-ask-user -s
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
