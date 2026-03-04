@@ -23,5 +23,5 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         run: |
-          TODAY=$(date +%Y-%m-%d)
-          copilot -p "Review the git log for this repository and write a bullet point summary of all code changes that were made today ($TODAY). Include a brief description of what was changed." --allow-tool "bash(git *)" --no-ask-user -s
+          FILE=/CODE-CHANGES.md
+          copilot -p "Review the git log for this repository and write a bullet point summary of all code changes that were made yesterday. Include a brief description of what was changed. Prepend the description to $FILE (creating the file if necessary) and delete the oldest descriptions if the file contains more than 5." --allow-tool "bash(git *)" --no-ask-user -s
