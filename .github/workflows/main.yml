@@ -23,5 +23,5 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         run: |
-          EMAIL_ADDRESS=alistairchristie@gmail.com
-          copilot -p "Review the git log for this repository and write a bullet point summary of all code changes that were made today. Include a brief description of what was changed. Email the details to $EMAIL_ADDRESS" --allow-tool "bash(git *)" --no-ask-user -s
+          FILE=/CHANGE_LOG.md
+          copilot -p "Review the git log for this repository and write a bullet point summary of all code changes that were made today. Include a brief description of what was changed. Prepend the details to $FILE" --allow-tool "bash(git *)" --allow-tool "write($FILE)" --no-ask-user -s
